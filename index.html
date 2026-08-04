@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dispatch Clock</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#14213D;
+    --ink-2:#1D2E52;
+    --paper:#EEF1F6;
+    --card:#FFFFFF;
+    --amber:#F2A93B;
+    --amber-dark:#C97F12;
+    --green:#1F9D6B;
+    --red:#D64545;
+    --text:#1B2333;
+    --muted:#67708A;
+    --line:#DCE1EA;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+  }
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  .display{font-family:'Space Grotesk',sans-serif;}
+
+  /* ===== App shell ===== */
+  .app{
+    max-width:640px;
+    margin:0 auto;
+    min-height:100vh;
+    background:var(--paper);
+    display:flex;
+    flex-direction:column;
+  }
+  .topbar{
+    background:var(--ink);
+    color:#fff;
+    padding:18px 20px 16px;
+    position:relative;
+    overflow:hidden;
+  }
+  .topbar::after{
+    content:"";
+    position:absolute;
+    top:0; right:-40px;
+    width:140px; height:140%;
+    background:repeating-linear-gradient(
+      -45deg,
+      var(--amber) 0 10px,
+      transparent 10px 20px
+    );
+    opacity:0.12;
+    transform:rotate(0deg);
+  }
+  .brand{
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+    position:relative;
+    z-index:1;
+  }
+  .brand .name{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:20px;
+    letter-spacing:0.01em;
+  }
+  .brand .tag{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--amber);
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    border:1px solid rgba(242,169,59,0.5);
+    padding:2px 6px;
+    border-radius:4px;
+  }
+  .subline{
+    font-size:12.5px;
+    color:#B9C2DA;
+    margin-top:6px;
+    position:relative;
+    z-index:1;
+  }
+
+  .tabs{
+    display:flex;
+    background:var(--ink-2);
+    position:relative;
+    z-index:1;
+  }
+  .tab{
+    flex:1;
+    padding:11px 8px;
+    text-align:center;
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    font-size:13px;
+    color:#A9B3CE;
+    cursor:pointer;
+    border-bottom:3px solid transparent;
+    transition:color .15s, border-color .15s;
+    user-select:none;
+  }
+  .tab.active{
+    color:#fff;
+    border-bottom-color:var(--amber);
+  }
+
+  .content{
+    flex:1;
+    padding:22px 18px 60px;
+  }
+  .view{display:none;}
+  .view.active{display:block;}
+
+  /* ===== Kiosk / QR ticket ===== */
+  .ticket{
+    background:var(--card);
+    border-radius:var(--radius);
+    box-shadow:0 1px 2px rgba(20,33,61,0.06), 0 8px 24px rgba(20,33,61,0.08);
+    padding:0;
+    overflow:hidden;
+    margin-bottom:18px;
+  }
+  .ticket-head{
+    background:var(--ink);
+    color:#fff;
+    padding:14px 18px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  .ticket-head .label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    color:var(--amber);
+  }
+  .ticket-head .date{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    font-size:14px;
+  }
+  .ticket-body{
+    padding:28px 20px 18px;
+    text-align:center;
+  }
+  #qr-box{
+    display:inline-block;
+    padding:14px;
+    background:#fff;
+    border:2px solid var(--ink);
+    border-radius:10px;
+  }
+  #qr-box img, #qr-box canvas{
+    display:block;
+    border-radius:2px;
+  }
+  .token-row{
+    margin-top:16px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+  }
+  .token-row .code{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:19px;
+    font-weight:600;
+    letter-spacing:0.14em;
+    background:var(--paper);
+    border:1px dashed var(--line);
+    padding:6px 14px;
+    border-radius:8px;
+  }
+  .perf{
+    height:0;
+    border-top:2px dashed var(--line);
+    margin:0 18px;
+    position:relative;
+  }
+  .perf::before, .perf::after{
+    content:"";
+    position:absolute;
+    top:-9px;
+    width:18px; height:18px;
+    background:var(--paper);
+    border-radius:50%;
+  }
+  .perf::before{left:-27px;}
+  .perf::after{right:-27px;}
+  .ticket-foot{
+    padding:14px 20px 18px;
+    text-align:center;
+  }
+  .ticket-foot .hint{
+    font-size:12.5px;
+    color:var(--muted);
+    line-height:1.5;
+  }
+  .ticket-foot a.linkbtn{
+    display:inline-block;
+    margin-top:10px;
+    font-size:12px;
+    font-family:'IBM Plex Mono',monospace;
+    color:var(--ink);
+    text-decoration:none;
+    border-bottom:1px solid var(--ink);
+  }
+
+  .status-strip{
+    display:flex;
+    gap:10px;
+    margin-bottom:18px;
+  }
+  .stat{
+    flex:1;
+    background:var(--card);
+    border-radius:10px;
+    padding:12px 14px;
+    border:1px solid var(--line);
+  }
+  .stat .n{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:22px;
+  }
+  .stat .l{
+    font-size:11px;
+    color:var(--muted);
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    margin-top:2px;
+  }
+
+  /* ===== Forms ===== */
+  .field{
+    margin-bottom:16px;
+  }
+  .field label{
+    display:block;
+    font-size:12.5px;
+    font-weight:600;
+    color:var(--muted);
+    margin-bottom:6px;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+  }
+  .field input{
+    width:100%;
+    padding:11px 13px;
+    border:1.5px solid var(--line);
+    border-radius:8px;
+    font-size:15px;
+    font-family:'Inter',sans-serif;
+    background:#fff;
+    color:var(--text);
+  }
+  .field input:focus{
+    outline:2px solid var(--amber);
+    outline-offset:1px;
+    border-color:var(--amber);
+  }
+  .row2{
+    display:flex;
+    gap:12px;
+  }
+  .row2 .field{flex:1;}
+
+  .btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    padding:12px 20px;
+    border-radius:9px;
+    border:none;
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    font-size:14.5px;
+    cursor:pointer;
+    transition:transform .08s, opacity .15s;
+    width:100%;
+  }
+  .btn:active{transform:scale(0.98);}
+  .btn:disabled{opacity:0.5; cursor:not-allowed;}
+  .btn-primary{background:var(--ink); color:#fff;}
+  .btn-amber{background:var(--amber); color:var(--ink);}
+  .btn-ghost{background:transparent; color:var(--ink); border:1.5px solid var(--line);}
+  .btn-sm{width:auto; padding:8px 14px; font-size:13px;}
+
+  .card{
+    background:var(--card);
+    border-radius:var(--radius);
+    padding:20px;
+    border:1px solid var(--line);
+    margin-bottom:16px;
+  }
+  .card h3{
+    margin:0 0 14px;
+    font-family:'Space Grotesk',sans-serif;
+    font-size:15px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--amber-dark);
+    margin-bottom:6px;
+  }
+  .help{
+    font-size:12.5px;
+    color:var(--muted);
+    line-height:1.5;
+    margin-top:-4px;
+    margin-bottom:14px;
+  }
+
+  /* ===== Log table ===== */
+  .log-controls{
+    display:flex;
+    gap:10px;
+    margin-bottom:14px;
+    align-items:center;
+  }
+  select{
+    padding:9px 12px;
+    border-radius:8px;
+    border:1.5px solid var(--line);
+    background:#fff;
+    font-family:'Inter',sans-serif;
+    font-size:13.5px;
+    flex:1;
+  }
+  .logtable{
+    width:100%;
+    border-collapse:collapse;
+    background:var(--card);
+    border-radius:12px;
+    overflow:hidden;
+    border:1px solid var(--line);
+  }
+  .logtable th{
+    background:var(--ink);
+    color:#fff;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    padding:9px 10px;
+    text-align:left;
+  }
+  .logtable td{
+    padding:9px 10px;
+    font-size:12.5px;
+    border-top:1px solid var(--line);
+  }
+  .logtable tr:nth-child(even) td{background:#F7F9FC;}
+  .pill{
+    display:inline-block;
+    padding:2px 8px;
+    border-radius:20px;
+    font-size:10.5px;
+    font-weight:700;
+    font-family:'IBM Plex Mono',monospace;
+    text-transform:uppercase;
+  }
+  .pill-in{background:rgba(31,157,107,0.14); color:var(--green);}
+  .pill-out{background:rgba(214,69,69,0.12); color:var(--red);}
+
+  .empty{
+    text-align:center;
+    padding:40px 20px;
+    color:var(--muted);
+    font-size:13.5px;
+  }
+
+  /* ===== Worker view ===== */
+  .worker-shell{
+    max-width:420px;
+    margin:0 auto;
+    padding:0;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+  }
+  .worker-hero{
+    background:var(--ink);
+    color:#fff;
+    padding:34px 24px 26px;
+    text-align:center;
+    position:relative;
+    overflow:hidden;
+  }
+  .worker-hero::after{
+    content:"";
+    position:absolute;
+    left:0; right:0; bottom:0;
+    height:6px;
+    background:repeating-linear-gradient(
+      -45deg,
+      var(--amber) 0 10px,
+      var(--ink-2) 10px 20px
+    );
+  }
+  .worker-hero .company{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:19px;
+  }
+  .worker-hero .day{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    color:var(--amber);
+    margin-top:6px;
+    letter-spacing:0.06em;
+  }
+  .worker-body{
+    flex:1;
+    padding:26px 22px 40px;
+  }
+  .locate-state{
+    text-align:center;
+    padding:30px 10px;
+  }
+  .pulse{
+    width:52px;height:52px;
+    border-radius:50%;
+    border:3px solid var(--amber);
+    border-top-color:transparent;
+    margin:0 auto 16px;
+    animation:spin 0.9s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .distance-badge{
+    display:inline-block;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:13px;
+    padding:5px 12px;
+    border-radius:20px;
+    margin-top:10px;
+  }
+  .distance-ok{background:rgba(31,157,107,0.14); color:var(--green);}
+  .distance-bad{background:rgba(214,69,69,0.12); color:var(--red);}
+
+  .confirm{
+    text-align:center;
+    padding:30px 10px;
+  }
+  .confirm .mark{
+    width:64px;height:64px;
+    border-radius:50%;
+    background:var(--green);
+    color:#fff;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    margin:0 auto 16px;
+    font-size:30px;
+  }
+  .confirm .mark.out{background:var(--red);}
+  .confirm h2{
+    font-family:'Space Grotesk',sans-serif;
+    margin:0 0 4px;
+  }
+  .confirm .ts{
+    font-family:'IBM Plex Mono',monospace;
+    color:var(--muted);
+    font-size:13px;
+  }
+
+  .toggle-group{
+    display:flex;
+    gap:10px;
+    margin-bottom:18px;
+  }
+  .toggle-opt{
+    flex:1;
+    text-align:center;
+    padding:14px 8px;
+    border-radius:10px;
+    border:2px solid var(--line);
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    font-size:14px;
+    cursor:pointer;
+    color:var(--muted);
+    background:#fff;
+  }
+  .toggle-opt.selected.in{border-color:var(--green); color:var(--green); background:rgba(31,157,107,0.06);}
+  .toggle-opt.selected.out{border-color:var(--red); color:var(--red); background:rgba(214,69,69,0.06);}
+
+  .banner{
+    padding:12px 14px;
+    border-radius:9px;
+    font-size:13px;
+    margin-bottom:16px;
+    line-height:1.5;
+  }
+  .banner-warn{background:#FFF4E0; color:#8A5A00; border:1px solid #F3D48A;}
+  .banner-err{background:#FCEBEB; color:#A32B2B; border:1px solid #F0B8B8;}
+
+  footer.note{
+    text-align:center;
+    font-size:11.5px;
+    color:var(--muted);
+    padding:18px 20px 30px;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .pulse{animation:none;}
+  }
+</style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script>
+(function(){
+
+  // ---------- Utilities ----------
+  function pad(n){ return n<10 ? '0'+n : ''+n; }
+  function todayStr(d){
+    d = d || new Date();
+    return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+  }
+  function fmtTime(d){
+    let h = d.getHours(), m = pad(d.getMinutes());
+    let ap = h>=12?'PM':'AM';
+    h = h%12; if(h===0) h=12;
+    return h+':'+m+' '+ap;
+  }
+  function fmtDateHuman(d){
+    return d.toLocaleDateString(undefined, {weekday:'short', month:'short', day:'numeric', year:'numeric'});
+  }
+  // simple deterministic string hash -> base36
+  function hashCode(str){
+    let hash = 5381;
+    for(let i=0;i<str.length;i++){
+      hash = ((hash << 5) + hash + str.charCodeAt(i)) >>> 0;
+    }
+    return hash.toString(36).toUpperCase();
+  }
+  function dailyToken(secret, dateStr){
+    return hashCode(secret + '::' + dateStr).slice(0,6).padStart(6,'0');
+  }
+  function haversine(lat1, lon1, lat2, lon2){
+    const R = 6371000;
+    const toRad = x => x * Math.PI/180;
+    const dLat = toRad(lat2-lat1);
+    const dLon = toRad(lon2-lon1);
+    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+    const c = 2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R*c;
+  }
+  function uid(){
+    return 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+  }
+  function baseUrl(){
+    return window.location.href.split('#')[0];
+  }
+  function parseHash(){
+    const h = window.location.hash.replace(/^#/, '');
+    const parts = h.split('&');
+    const out = {mode: parts[0] || ''};
+    parts.slice(1).forEach(p=>{
+      const [k,v] = p.split('=');
+      out[k] = decodeURIComponent(v||'');
+    });
+    return out;
+  }
+
+  // ---------- Storage helpers ----------
+  async function getConfig(){
+    try{
+      const r = await window.storage.get('epx-config', true);
+      return r ? JSON.parse(r.value) : null;
+    }catch(e){ return null; }
+  }
+  async function setConfig(cfg){
+    try{
+      await window.storage.set('epx-config', JSON.stringify(cfg), true);
+      return true;
+    }catch(e){ return false; }
+  }
+  async function getLog(){
+    try{
+      const r = await window.storage.get('epx-log', true);
+      return r ? JSON.parse(r.value) : [];
+    }catch(e){ return []; }
+  }
+  async function appendLog(entry){
+    const log = await getLog();
+    log.push(entry);
+    try{
+      await window.storage.set('epx-log', JSON.stringify(log), true);
+      return true;
+    }catch(e){ return false; }
+  }
+
+  const root = document.getElementById('root');
+  const hashParams = parseHash();
+
+  if(hashParams.mode === 'worker'){
+    renderWorker();
+  } else {
+    renderAdmin();
+  }
+
+  // =========================================================
+  // WORKER VIEW
+  // =========================================================
+  async function renderWorker(){
+    root.innerHTML = `
+      <div class="worker-shell">
+        <div class="worker-hero">
+          <div class="company" id="w-company">Dispatch Clock</div>
+          <div class="day">${fmtDateHuman(new Date())}</div>
+        </div>
+        <div class="worker-body" id="w-body">
+          <div class="locate-state">
+            <div class="pulse"></div>
+            <div style="font-family:'Space Grotesk',sans-serif;font-weight:600;">Checking your location…</div>
+            <div style="font-size:12.5px;color:var(--muted);margin-top:6px;">Allow location access when prompted</div>
+          </div>
+        </div>
+        <footer class="note">Dispatch Clock &middot; secure daily code, GPS-verified</footer>
+      </div>
+    `;
+
+    const cfg = await getConfig();
+    const body = document.getElementById('w-body');
+
+    if(!cfg || cfg.lat === undefined){
+      body.innerHTML = `
+        <div class="banner banner-err">
+          <strong>Not set up yet.</strong><br>
+          Ask your admin to complete location setup before this code can be used.
+        </div>`;
+      return;
+    }
+    document.getElementById('w-company').textContent = cfg.companyName || 'Dispatch Clock';
+
+    const today = todayStr();
+    const expected = dailyToken(cfg.secret, today);
+    if(!hashParams.token || hashParams.token.toUpperCase() !== expected){
+      body.innerHTML = `
+        <div class="banner banner-warn">
+          <strong>This code has expired.</strong><br>
+          Codes reset every day at midnight. Please scan today's code at your workplace.
+        </div>`;
+      return;
+    }
+
+    if(!navigator.geolocation){
+      body.innerHTML = `<div class="banner banner-err">Your device doesn't support location services, so this can't be verified.</div>`;
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(async function(pos){
+      const lat = pos.coords.latitude, lon = pos.coords.longitude;
+      const dist = haversine(lat, lon, cfg.lat, cfg.lng);
+      const within = dist <= (cfg.radiusM || 100);
+
+      if(!within){
+        body.innerHTML = `
+          <div style="text-align:center;padding:20px 10px 10px;">
+            <div style="font-size:38px;">📍</div>
+            <h2 style="font-family:'Space Grotesk',sans-serif;margin:8px 0 4px;">Too far from site</h2>
+            <div class="distance-badge distance-bad">${Math.round(dist)}m away &middot; need within ${cfg.radiusM}m</div>
+            <div style="font-size:12.5px;color:var(--muted);margin-top:16px;">Move closer to the clock-in point and reopen this page.</div>
+          </div>`;
+        return;
+      }
+
+      renderClockForm(body, cfg, lat, lon, dist, today);
+    }, function(err){
+      body.innerHTML = `
+        <div class="banner banner-err">
+          <strong>Location access needed.</strong><br>
+          Please allow location permission in your browser settings, then reopen this page.
+        </div>`;
+    }, {enableHighAccuracy:true, timeout:12000});
+  }
+
+  function renderClockForm(body, cfg, lat, lon, dist, today){
+    let selectedType = 'in';
+    body.innerHTML = `
+      <div class="distance-badge distance-ok" style="display:block;text-align:center;margin-bottom:18px;">On site &middot; ${Math.round(dist)}m from point</div>
+      <div class="field">
+        <label>Your name</label>
+        <input type="text" id="w-name" placeholder="e.g. Ahmad Faizal" autocomplete="name">
+      </div>
+      <div class="toggle-group">
+        <div class="toggle-opt selected in" id="opt-in">Clock In</div>
+        <div class="toggle-opt out" id="opt-out">Clock Out</div>
+      </div>
+      <button class="btn btn-primary" id="submit-btn">Confirm &amp; Submit</button>
+    `;
+    const optIn = document.getElementById('opt-in');
+    const optOut = document.getElementById('opt-out');
+    optIn.onclick = ()=>{ selectedType='in'; optIn.classList.add('selected'); optOut.classList.remove('selected'); };
+    optOut.onclick = ()=>{ selectedType='out'; optOut.classList.add('selected'); optIn.classList.remove('selected'); };
+
+    document.getElementById('submit-btn').onclick = async function(){
+      const nameInput = document.getElementById('w-name');
+      const name = nameInput.value.trim();
+      if(!name){
+        nameInput.style.borderColor = 'var(--red)';
+        nameInput.focus();
+        return;
+      }
+      this.disabled = true;
+      this.textContent = 'Submitting…';
+      const now = new Date();
+      const entry = {
+        id: uid(),
+        name: name,
+        type: selectedType,
+        ts: now.toISOString(),
+        date: today,
+        distanceM: Math.round(dist),
+        lat: lat, lng: lon
+      };
+      const ok = await appendLog(entry);
+      if(ok){
+        body.innerHTML = `
+          <div class="confirm">
+            <div class="mark ${selectedType==='out'?'out':''}">${selectedType==='out'?'&#10003;':'&#10003;'}</div>
+            <h2>${selectedType==='in' ? 'Clocked In' : 'Clocked Out'}</h2>
+            <div class="ts">${name} &middot; ${fmtTime(now)}</div>
+          </div>`;
+      } else {
+        this.disabled = false;
+        this.textContent = 'Confirm & Submit';
+        alert('Could not save — check your connection and try again.');
+      }
+    };
+  }
+
+  // =========================================================
+  // ADMIN VIEW
+  // =========================================================
+  async function renderAdmin(){
+    root.innerHTML = `
+      <div class="app">
+        <div class="topbar">
+          <div class="brand">
+            <span class="name">Dispatch Clock</span>
+            <span class="tag">Admin</span>
+          </div>
+          <div class="subline">Daily rotating QR &middot; GPS-verified attendance</div>
+        </div>
+        <div class="tabs">
+          <div class="tab active" data-view="kiosk">Today's Code</div>
+          <div class="tab" data-view="setup">Setup</div>
+          <div class="tab" data-view="log">Log</div>
+        </div>
+        <div class="content">
+          <div class="view active" id="view-kiosk"></div>
+          <div class="view" id="view-setup"></div>
+          <div class="view" id="view-log"></div>
+        </div>
+      </div>
+    `;
+
+    document.querySelectorAll('.tab').forEach(t=>{
+      t.onclick = ()=>{
+        document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+        document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+        t.classList.add('active');
+        document.getElementById('view-'+t.dataset.view).classList.add('active');
+        if(t.dataset.view === 'log') renderLog();
+        if(t.dataset.view === 'kiosk') renderKiosk();
+      };
+    });
+
+    await renderKiosk();
+    renderSetup();
+  }
+
+  async function renderKiosk(){
+    const el = document.getElementById('view-kiosk');
+    const cfg = await getConfig();
+    const today = todayStr();
+
+    if(!cfg || cfg.lat === undefined){
+      el.innerHTML = `
+        <div class="card" style="text-align:center;">
+          <div class="eyebrow">Step 1 of 1</div>
+          <h3 style="justify-content:center;">Set up your location first</h3>
+          <div class="help">Head to the Setup tab to set your clock-in point and radius. Your QR code will appear here once that's done.</div>
+        </div>`;
+      return;
+    }
+
+    const token = dailyToken(cfg.secret, today);
+    const url = baseUrl() + '#worker&token=' + token + '&date=' + today;
+
+    el.innerHTML = `
+      <div class="status-strip">
+        <div class="stat"><div class="n" id="stat-in">–</div><div class="l">Clocked in today</div></div>
+        <div class="stat"><div class="n" id="stat-out">–</div><div class="l">Clocked out today</div></div>
+      </div>
+      <div class="ticket">
+        <div class="ticket-head">
+          <span class="label">Daily Clock Code</span>
+          <span class="date mono">${today}</span>
+        </div>
+        <div class="ticket-body">
+          <div id="qr-box"></div>
+          <div class="token-row">
+            <span class="code">${token}</span>
+          </div>
+        </div>
+        <div class="perf"></div>
+        <div class="ticket-foot">
+          <div class="hint">Display this at ${cfg.companyName || 'your'} clock-in point.<br>Resets automatically at midnight &middot; radius ${cfg.radiusM}m.</div>
+        </div>
+      </div>
+    `;
+    new QRCode(document.getElementById('qr-box'), {
+      text: url,
+      width: 208,
+      height: 208,
+      colorDark: '#14213D',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+
+    const log = await getLog();
+    const todays = log.filter(e => e.date === today);
+    document.getElementById('stat-in').textContent = todays.filter(e=>e.type==='in').length;
+    document.getElementById('stat-out').textContent = todays.filter(e=>e.type==='out').length;
+  }
+
+  function renderSetup(){
+    const el = document.getElementById('view-setup');
+    el.innerHTML = `
+      <div class="card">
+        <h3>Company &amp; site details</h3>
+        <div class="field">
+          <label>Company / site name</label>
+          <input type="text" id="s-company" placeholder="e.g. Exprexa Logistics – Warehouse A">
+        </div>
+        <div class="field">
+          <label>Clock-in point (latitude, longitude)</label>
+          <div class="row2">
+            <input type="text" id="s-lat" placeholder="Latitude">
+            <input type="text" id="s-lng" placeholder="Longitude">
+          </div>
+        </div>
+        <button class="btn btn-ghost" id="s-locate" style="margin-bottom:16px;">📍 Use my current location</button>
+        <div class="field">
+          <label>Allowed radius (metres)</label>
+          <input type="number" id="s-radius" placeholder="e.g. 100" min="10">
+        </div>
+        <div class="help">Workers scanning the code must be within this distance to clock in or out.</div>
+        <button class="btn btn-primary" id="s-save">Save Setup</button>
+        <div id="s-msg" style="margin-top:10px;font-size:13px;"></div>
+      </div>
+      <div class="card">
+        <h3>Share with workers</h3>
+        <div class="help">Print or display the QR from the "Today's Code" tab at your clock-in point. Workers scan it with their phone camera each day — no app install needed. The code auto-rotates every midnight.</div>
+      </div>
+    `;
+
+    getConfig().then(cfg=>{
+      if(cfg){
+        document.getElementById('s-company').value = cfg.companyName || '';
+        document.getElementById('s-lat').value = cfg.lat ?? '';
+        document.getElementById('s-lng').value = cfg.lng ?? '';
+        document.getElementById('s-radius').value = cfg.radiusM ?? 100;
+      }
+    });
+
+    document.getElementById('s-locate').onclick = function(){
+      if(!navigator.geolocation){ alert('Geolocation not supported on this device.'); return; }
+      this.textContent = 'Locating…';
+      const btn = this;
+      navigator.geolocation.getCurrentPosition(pos=>{
+        document.getElementById('s-lat').value = pos.coords.latitude.toFixed(6);
+        document.getElementById('s-lng').value = pos.coords.longitude.toFixed(6);
+        btn.textContent = '📍 Use my current location';
+      }, err=>{
+        btn.textContent = '📍 Use my current location';
+        alert('Could not get location: ' + err.message);
+      }, {enableHighAccuracy:true, timeout:12000});
+    };
+
+    document.getElementById('s-save').onclick = async function(){
+      const lat = parseFloat(document.getElementById('s-lat').value);
+      const lng = parseFloat(document.getElementById('s-lng').value);
+      const radiusM = parseInt(document.getElementById('s-radius').value, 10) || 100;
+      const companyName = document.getElementById('s-company').value.trim();
+      const msg = document.getElementById('s-msg');
+
+      if(isNaN(lat) || isNaN(lng)){
+        msg.style.color = 'var(--red)';
+        msg.textContent = 'Please set a valid latitude and longitude.';
+        return;
+      }
+      this.disabled = true;
+      this.textContent = 'Saving…';
+
+      const existing = await getConfig();
+      const cfg = {
+        companyName, lat, lng, radiusM,
+        secret: (existing && existing.secret) ? existing.secret : uid()
+      };
+      const ok = await setConfig(cfg);
+      this.disabled = false;
+      this.textContent = 'Save Setup';
+      if(ok){
+        msg.style.color = 'var(--green)';
+        msg.textContent = "Saved. Check the \"Today's Code\" tab for your QR.";
+      } else {
+        msg.style.color = 'var(--red)';
+        msg.textContent = 'Could not save — please try again.';
+      }
+    };
+  }
+
+  async function renderLog(){
+    const el = document.getElementById('view-log');
+    el.innerHTML = `<div class="empty">Loading log…</div>`;
+    const log = await getLog();
+    const dates = Array.from(new Set(log.map(e=>e.date))).sort().reverse();
+
+    el.innerHTML = `
+      <div class="log-controls">
+        <select id="l-filter">
+          <option value="all">All dates</option>
+          ${dates.map(d=>`<option value="${d}">${d}</option>`).join('')}
+        </select>
+        <button class="btn btn-amber btn-sm" id="l-export">Export CSV</button>
+      </div>
+      <div id="l-table"></div>
+    `;
+
+    function draw(filter){
+      const rows = filter === 'all' ? log : log.filter(e=>e.date===filter);
+      const sorted = rows.slice().sort((a,b)=> b.ts.localeCompare(a.ts));
+      const tbl = document.getElementById('l-table');
+      if(sorted.length === 0){
+        tbl.innerHTML = `<div class="empty">No clock records yet.<br>Entries will appear here once workers start scanning.</div>`;
+        return;
+      }
+      tbl.innerHTML = `
+        <table class="logtable">
+          <thead><tr><th>Name</th><th>Type</th><th>Date</th><th>Time</th><th>Dist.</th></tr></thead>
+          <tbody>
+            ${sorted.map(e=>{
+              const d = new Date(e.ts);
+              return `<tr>
+                <td>${escapeHtml(e.name)}</td>
+                <td><span class="pill pill-${e.type}">${e.type}</span></td>
+                <td class="mono">${e.date}</td>
+                <td class="mono">${fmtTime(d)}</td>
+                <td class="mono">${e.distanceM}m</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+    draw('all');
+    document.getElementById('l-filter').onchange = e => draw(e.target.value);
+    document.getElementById('l-export').onclick = () => {
+      const filter = document.getElementById('l-filter').value;
+      const rows = filter === 'all' ? log : log.filter(e=>e.date===filter);
+      exportCsv(rows);
+    };
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function exportCsv(rows){
+    const header = ['Name','Type','Date','Time','DistanceM','Latitude','Longitude'];
+    const lines = [header.join(',')];
+    rows.slice().sort((a,b)=>a.ts.localeCompare(b.ts)).forEach(e=>{
+      const d = new Date(e.ts);
+      const line = [
+        '"'+e.name.replace(/"/g,'""')+'"',
+        e.type,
+        e.date,
+        fmtTime(d),
+        e.distanceM,
+        e.lat,
+        e.lng
+      ].join(',');
+      lines.push(line);
+    });
+    const blob = new Blob([lines.join('\\n')], {type:'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'attendance_log_' + todayStr() + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+})();
+</script>
+</body>
+</html>
